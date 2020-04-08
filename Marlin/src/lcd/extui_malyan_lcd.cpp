@@ -1,6 +1,6 @@
 /**
  * Marlin 3D Printer Firmware
- * Copyright (c) 2019 MarlinFirmware [https://github.com/MarlinFirmware/Marlin]
+ * Copyright (c) 2020 MarlinFirmware [https://github.com/MarlinFirmware/Marlin]
  *
  * Based on Sprinter and grbl.
  * Copyright (c) 2011 Camiel Gubbels / Erik van der Zalm
@@ -47,22 +47,16 @@
 
 #define DEBUG_MALYAN_LCD
 
-#include "extensible_ui/ui_api.h"
+#include "extui/ui_api.h"
 
 #include "ultralcd.h"
+#include "../sd/cardreader.h"
 #include "../module/temperature.h"
 #include "../module/stepper.h"
 #include "../module/motion.h"
 #include "../libs/duration_t.h"
 #include "../module/printcounter.h"
 #include "../gcode/queue.h"
-
-#if ENABLED(SDSUPPORT)
-  #include "../sd/cardreader.h"
-  #include "../sd/SdFatConfig.h"
-#else
-  #define LONG_FILENAME_LENGTH 0
-#endif
 
 #define DEBUG_OUT ENABLED(DEBUG_MALYAN_LCD)
 #include "../core/debug_out.h"
@@ -87,7 +81,7 @@ void write_to_lcd_P(PGM_P const message) {
   char encoded_message[MAX_CURLY_COMMAND];
   uint8_t message_length = _MIN(strlen_P(message), sizeof(encoded_message));
 
-  for (uint8_t i = 0; i < message_length; i++)
+  LOOP_L_N(i, message_length)
     encoded_message[i] = pgm_read_byte(&message[i]) | 0x80;
 
   LCD_SERIAL.Print::write(encoded_message, message_length);
@@ -97,7 +91,7 @@ void write_to_lcd(const char * const message) {
   char encoded_message[MAX_CURLY_COMMAND];
   const uint8_t message_length = _MIN(strlen(message), sizeof(encoded_message));
 
-  for (uint8_t i = 0; i < message_length; i++)
+  LOOP_L_N(i, message_length)
     encoded_message[i] = message[i] | 0x80;
 
   LCD_SERIAL.Print::write(encoded_message, message_length);
@@ -200,18 +194,19 @@ void process_lcd_eb_command(const char* command) {
  * {J:E}{J:X+200}{J:E}
  * X, Y, Z, A (extruder)
  */
-void process_lcd_j_command(const char* command) {
-  auto move_axis = [command](const auto axis) {
-    const float dist = atof(command + 1) / 10.0;
-    ExtUI::setAxisPosition_mm(ExtUI::getAxisPosition_mm(axis) + dist, axis);
-  };
+template<typename T>
+void j_move_axis(const char* command, const T axis) {
+  const float dist = atof(command + 1) / 10.0;
+  ExtUI::setAxisPosition_mm(ExtUI::getAxisPosition_mm(axis) + dist, axis);
+};
 
+void process_lcd_j_command(const char* command) {
   switch (command[0]) {
     case 'E': break;
-    case 'A': move_axis(ExtUI::extruder_t::E0); break;
-    case 'Y': move_axis(ExtUI::axis_t::Y); break;
-    case 'Z': move_axis(ExtUI::axis_t::Z); break;
-    case 'X': move_axis(ExtUI::axis_t::X); break;
+    case 'A': j_move_axis<ExtUI::extruder_t>(command, ExtUI::extruder_t::E0); break;
+    case 'Y': j_move_axis<ExtUI::axis_t>(command, ExtUI::axis_t::Y); break;
+    case 'Z': j_move_axis<ExtUI::axis_t>(command, ExtUI::axis_t::Z); break;
+    case 'X': j_move_axis<ExtUI::axis_t>(command, ExtUI::axis_t::X); break;
     default: DEBUG_ECHOLNPAIR("UNKNOWN J COMMAND ", command);
   }
 }
@@ -254,7 +249,7 @@ void process_lcd_p_command(const char* command) {
         ExtUI::stopPrint();
         write_to_lcd_P(PSTR("{SYS:STARTED}"));
         break;
-    case 'H': queue.enqueue_now_P(PSTR("G28")); break; // Home all axes
+    case 'H': queue.enqueue_now_P(G28_STR); break; // Home all axes
     default: {
       #if ENABLED(SDSUPPORT)
         // Print file 000 - a three digit number indicating which
@@ -402,8 +397,8 @@ void update_usb_status(const bool forceUpdate) {
   // This is mildly different than stock, which
   // appears to use the usb discovery status.
   // This is more logical.
-  if (last_usb_connected_status != SerialUSB || forceUpdate) {
-    last_usb_connected_status = SerialUSB;
+  if (last_usb_connected_status != MYSERIAL0 || forceUpdate) {
+    last_usb_connected_status = MYSERIAL0;
     write_to_lcd_P(last_usb_connected_status ? PSTR("{R:UC}\r\n") : PSTR("{R:UD}\r\n"));
   }
 }
@@ -489,6 +484,7 @@ namespace ExtUI {
   void onLoadSettings(const char*) {}
   void onConfigurationStoreWritten(bool) {}
   void onConfigurationStoreRead(bool) {}
+  void onPidTuning(const result_t) {}
 }
 
 #endif // MALYAN_LCD

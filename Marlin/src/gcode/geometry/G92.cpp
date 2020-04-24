@@ -1,6 +1,6 @@
 /**
  * Marlin 3D Printer Firmware
- * Copyright (c) 2020 MarlinFirmware [https://github.com/MarlinFirmware/Marlin]
+ * Copyright (c) 2019 MarlinFirmware [https://github.com/MarlinFirmware/Marlin]
  *
  * Based on Sprinter and grbl.
  * Copyright (c) 2011 Camiel Gubbels / Erik van der Zalm
@@ -25,7 +25,7 @@
 #include "../../module/stepper.h"
 
 #if ENABLED(I2C_POSITION_ENCODERS)
-  #include "../../feature/encoder_i2c.h"
+  #include "../../feature/I2CPositionEncoder.h"
 #endif
 
 /**
@@ -33,9 +33,14 @@
  */
 void GcodeSuite::G92() {
 
-  bool sync_E = false, sync_XYZ = false;
+  bool didE = false;
+  #if IS_SCARA || !HAS_POSITION_SHIFT
+    bool didXYZ = false;
+  #else
+    constexpr bool didXYZ = false;
+  #endif
 
-  #if ENABLED(USE_GCODE_SUBCODES)
+  #if USE_GCODE_SUBCODES
     const uint8_t subcode_G92 = parser.subcode;
   #else
     constexpr uint8_t subcode_G92 = 0;
@@ -59,7 +64,11 @@ void GcodeSuite::G92() {
         LOOP_XYZE(i) {
           if (parser.seenval(axis_codes[i])) {
             current_position[i] = parser.value_axis_units((AxisEnum)i);
-            if (i == E_AXIS) sync_E = true; else sync_XYZ = true;
+            #if IS_SCARA || !HAS_POSITION_SHIFT
+              if (i == E_AXIS) didE = true; else didXYZ = true;
+            #elif HAS_POSITION_SHIFT
+              if (i == E_AXIS) didE = true;
+            #endif
           }
         }
       } break;
@@ -72,12 +81,12 @@ void GcodeSuite::G92() {
                       d = v - current_position[i];
           if (!NEAR_ZERO(d)) {
             #if IS_SCARA || !HAS_POSITION_SHIFT
-              if (i == E_AXIS) sync_E = true; else sync_XYZ = true;
+              if (i == E_AXIS) didE = true; else didXYZ = true;
               current_position[i] = v;        // Without workspaces revert to Marlin 1.0 behavior
             #elif HAS_POSITION_SHIFT
               if (i == E_AXIS) {
-                sync_E = true;
-                current_position.e = v;       // When using coordinate spaces, only E is set directly
+                didE = true;
+                current_position.e = v; // When using coordinate spaces, only E is set directly
               }
               else {
                 position_shift[i] += d;       // Other axes simply offset the coordinate space
@@ -96,8 +105,8 @@ void GcodeSuite::G92() {
       coordinate_system[active_coordinate_system] = position_shift;
   #endif
 
-  if    (sync_XYZ) sync_plan_position();
-  else if (sync_E) sync_plan_position_e();
+  if    (didXYZ) sync_plan_position();
+  else if (didE) sync_plan_position_e();
 
   report_current_position();
 }

@@ -59,10 +59,6 @@
   #include "../../sd/cardreader.h"
 #endif
 
-#if ENABLED(LCD_SHOW_E_TOTAL)
-  #include "../../MarlinCore.h" // for printingIsActive
-#endif
-
 #define TEXT_MODE_LCD_WIDTH 16
 
 #define BUFFER_WIDTH   256
@@ -209,7 +205,7 @@ void ST7920_Lite_Status_Screen::clear_ddram() {
 
 /* This fills the entire graphics buffer with zeros */
 void ST7920_Lite_Status_Screen::clear_gdram() {
-  LOOP_L_N(y, BUFFER_HEIGHT) {
+  for (uint8_t y = 0; y < BUFFER_HEIGHT; y++) {
     set_gdram_address(0, y);
     begin_data();
     for (uint8_t i = (BUFFER_WIDTH) / 16; i--;) write_word(0);
@@ -407,7 +403,7 @@ void ST7920_Lite_Status_Screen::draw_degree_symbol(uint8_t x, uint8_t y, const b
     const uint8_t x_word  = x >> 1,
                   y_top   = degree_symbol_y_top,
                   y_bot   = y_top + COUNT(degree_symbol);
-    LOOP_S_L_N(i, y_top, y_bot) {
+    for (uint8_t i = y_top; i < y_bot; i++) {
       uint8_t byte = pgm_read_byte(p_bytes++);
       set_gdram_address(x_word, i + y * 16);
       begin_data();
@@ -467,10 +463,10 @@ void ST7920_Lite_Status_Screen::draw_progress_bar(const uint8_t value) {
   const uint8_t char_pcnt  = 100 / width; // How many percent does each 16-bit word represent?
 
   // Draw the progress bar as a bitmap in CGRAM
-  LOOP_S_LE_N(y, top, bottom) {
+  for (uint8_t y = top; y <= bottom; y++) {
     set_gdram_address(left, y);
     begin_data();
-    LOOP_L_N(x, width) {
+    for (uint8_t x = 0; x < width; x++) {
       uint16_t gfx_word = 0x0000;
       if ((x + 1) * char_pcnt <= value)
         gfx_word = 0xFFFF;                                              // Draw completely filled bytes
@@ -664,7 +660,7 @@ void ST7920_Lite_Status_Screen::draw_status_message() {
   #endif
 }
 
-void ST7920_Lite_Status_Screen::draw_position(const xyze_pos_t &pos, const bool position_known) {
+void ST7920_Lite_Status_Screen::draw_position(const xyz_pos_t &pos, const bool position_known) {
   char str[7];
   set_ddram_address(DDRAM_LINE_4);
   begin_data();
@@ -672,25 +668,11 @@ void ST7920_Lite_Status_Screen::draw_position(const xyze_pos_t &pos, const bool 
   // If position is unknown, flash the labels.
   const unsigned char alt_label = position_known ? 0 : (ui.get_blink() ? ' ' : 0);
 
-  if (true
-    #if ENABLED(LCD_SHOW_E_TOTAL)
-      && !printingIsActive()
-    #endif
-  ) {
-    write_byte(alt_label ? alt_label : 'X');
-    write_str(dtostrf(pos.x, -4, 0, str), 4);
+  write_byte(alt_label ? alt_label : 'X');
+  write_str(dtostrf(pos.x, -4, 0, str), 4);
 
-    write_byte(alt_label ? alt_label : 'Y');
-    write_str(dtostrf(pos.y, -4, 0, str), 4);
-  }
-  else {
-    #if ENABLED(LCD_SHOW_E_TOTAL)
-      char tmp[15];
-      const uint8_t escale = e_move_accumulator >= 100000.0f ? 10 : 1; // After 100m switch to cm
-      sprintf_P(tmp, PSTR("E%-7ld%cm "), uint32_t(_MAX(e_move_accumulator, 0.0f)) / escale, escale == 10 ? 'c' : 'm'); // 1234567mm
-      write_str(tmp);
-    #endif
-  }
+  write_byte(alt_label ? alt_label : 'Y');
+  write_str(dtostrf(pos.y, -4, 0, str), 4);
 
   write_byte(alt_label ? alt_label : 'Z');
   write_str(dtostrf(pos.z, -5, 1, str), 5);
@@ -912,7 +894,7 @@ void ST7920_Lite_Status_Screen::on_exit() {
   ncs();
 }
 
-// Called prior to the KILL screen to
+// This is called prior to the KILL screen to
 // clear the screen, preventing a garbled display.
 void ST7920_Lite_Status_Screen::clear_text_buffer() {
   cs();

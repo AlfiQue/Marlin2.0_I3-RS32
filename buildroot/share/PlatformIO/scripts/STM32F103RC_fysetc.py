@@ -5,6 +5,7 @@ Import("env", "projenv")
 # Relocate firmware from 0x08000000 to 0x08002000
 #env['CPPDEFINES'].remove(("VECT_TAB_ADDR", 134217728))
 #env['CPPDEFINES'].append(("VECT_TAB_ADDR", "0x08010000"))
+#env.Replace(LDSCRIPT_PATH="buildroot/share/PlatformIO/ldscripts/fysetc_aio_ii.ld")
 
 # Custom HEX from ELF
 env.AddPostAction(
@@ -30,7 +31,7 @@ if platform.get_package_dir("tool-stm32duino") != None:
 
 env.Replace(
 	UPLOADER=UPLOAD_TOOL,
-	UPLOADCMD=expandvars(UPLOAD_TOOL + " -v -i rts,-dtr,dtr -R -b 115200 -g 0x8000000 -w \"" + join("$BUILD_DIR","${PROGNAME}.hex")+"\"" + " $UPLOAD_PORT")
+	UPLOADCMD=expandvars(UPLOAD_TOOL + " -v -i rts,-dtr,dtr $UPLOAD_PORT -R -w \"" + join("$BUILD_DIR","${PROGNAME}.hex")+"\"")
 )
 
 # Python callback
